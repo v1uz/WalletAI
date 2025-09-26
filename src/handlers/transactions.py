@@ -9,7 +9,7 @@ from decimal import Decimal, InvalidOperation
 from datetime import datetime
 import re
 
-from src.models.base import User, Transaction, Category, TransactionType
+from models.base import User, Transaction, Category, TransactionType
 
 router = Router()
 
@@ -83,7 +83,7 @@ async def process_amount(message: Message, state: FSMContext, session: AsyncSess
     
     if not categories:
         # No categories yet, create defaults
-        from src.core.database import database
+        from core.database import database
         await database.init_default_categories(message.from_user.id)
         # Re-fetch categories
         result = await session.execute(

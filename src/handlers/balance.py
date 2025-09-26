@@ -4,7 +4,7 @@ from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 from datetime import datetime, timedelta
-from src.models.base import User, Transaction, TransactionType
+from models.base import User, Transaction, TransactionType
 
 router = Router()
 

@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from src.core.config import settings
-from src.models.base import Base, Category, TransactionType
+from core.config import settings
+from models.base import Base, Category, TransactionType
 
 class Database:
     def __init__(self):

@@ -1,13 +1,13 @@
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from src.core.config import settings
-from src.core.database import database
-from src.middleware.database import DatabaseMiddleware
+from core.config import settings
+from core.database import database
+from middleware.database import DatabaseMiddleware
 from sqlalchemy import select
-from src.models.base import User
+from models.base import User
 
 # Setup logging
 logging.basicConfig(
@@ -31,8 +31,8 @@ async def main():
     dp.update.middleware(DatabaseMiddleware(database.session_factory))
     
     # Register routers
-    from src.handlers.transactions import router as trans_router
-    from src.handlers.balance import router as balance_router
+    from handlers.transactions import router as trans_router
+    from handlers.balance import router as balance_router
     dp.include_router(trans_router)
     dp.include_router(balance_router)
     
