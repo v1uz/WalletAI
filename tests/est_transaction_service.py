@@ -3,9 +3,12 @@ import pytest
 from decimal import Decimal
 from datetime import datetime
 import factory
-from aiogram_tests import MockedBot
-from aiogram_tests.handler import MessageHandler
-from aiogram_tests.types.dataset import MESSAGE
+from unittest.mock import Mock as MockRedis, Mock as MockedBot
+from src.models.transaction import Transaction, TransactionType
+from src.models.budget import Budget
+from src.services.ai_categorization import AICategorizationService
+from src.services.notification_service import NotificationService
+from src.middleware.security import SecurityMiddleware
 
 class TransactionFactory(factory.Factory):
     class Meta:

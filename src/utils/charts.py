@@ -4,6 +4,7 @@ import seaborn as sns
 from io import BytesIO
 import pandas as pd
 from datetime import datetime, timedelta
+from ..models.transaction import TransactionType
 
 class ChartService:
     def __init__(self):

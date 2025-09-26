@@ -1,11 +1,11 @@
 # src/core/logging.py
 import logging
 import json
+import os
+import uuid
 from datetime import datetime
 from functools import wraps
-import sentry_sdk
-from sentry_sdk.integrations.asyncio import AsyncioIntegration
-from sentry_sdk.integrations.logging import LoggingIntegration
+from typing import Optional
 
 class StructuredFormatter(logging.Formatter):
     """JSON formatter for structured logging"""
@@ -26,27 +26,44 @@ class StructuredFormatter(logging.Formatter):
         
         return json.dumps(log_entry)
 
-def setup_logging():
-    """Setup production logging with Sentry integration"""
+def setup_logging(use_sentry: bool = False):
+    """Setup logging with optional Sentry integration"""
     
-    # Configure Sentry
-    sentry_sdk.init(
-        dsn=os.getenv('SENTRY_DSN'),
-        integrations=[
-            AsyncioIntegration(),
-            LoggingIntegration(level=logging.INFO, event_level=logging.ERROR)
-        ],
-        traces_sample_rate=0.1,
-        profiles_sample_rate=0.1,
-        environment=os.getenv('ENVIRONMENT', 'production')
-    )
+    # Configure Sentry if DSN is provided
+    if use_sentry and os.getenv('SENTRY_DSN'):
+        try:
+            import sentry_sdk
+            from sentry_sdk.integrations.asyncio import AsyncioIntegration
+            from sentry_sdk.integrations.logging import LoggingIntegration
+            
+            sentry_sdk.init(
+                dsn=os.getenv('SENTRY_DSN'),
+                integrations=[
+                    AsyncioIntegration(),
+                    LoggingIntegration(level=logging.INFO, event_level=logging.ERROR)
+                ],
+                traces_sample_rate=0.1,
+                profiles_sample_rate=0.1,
+                environment=os.getenv('ENVIRONMENT', 'development')
+            )
+        except ImportError:
+            logging.warning("Sentry SDK not installed, skipping Sentry integration")
     
     # Configure structured logging
     handler = logging.StreamHandler()
-    handler.setFormatter(StructuredFormatter())
+    
+    # Use simpler format for development
+    if os.getenv('ENVIRONMENT') == 'development':
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+    else:
+        formatter = StructuredFormatter()
+    
+    handler.setFormatter(formatter)
     
     logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.INFO if os.getenv('DEBUG') != 'true' else logging.DEBUG)
     logger.addHandler(handler)
     
     return logger

@@ -1,17 +1,42 @@
 # src/middleware/security.py
-from aiogram import BaseMiddleware
-from aiogram.types import TelegramObject
-import hashlib
-import hmac
 import time
-import redis.asyncio as redis
-from typing import Callable, Dict, Any, Awaitable
+import re
+import html
+from collections import defaultdict
+from typing import Callable, Dict, Any, Awaitable, Optional
+from aiogram import BaseMiddleware
+from aiogram.types import TelegramObject, Message
+
+class RateLimiter:
+    """Simple rate limiter using sliding window"""
+    def __init__(self, max_requests: int = 20, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window = window_seconds
+        self.user_requests = defaultdict(list)
+    
+    async def check_rate_limit(self, user_id: int) -> bool:
+        """Check if user has exceeded rate limit"""
+        current_time = time.time()
+        
+        # Remove old requests outside the window
+        self.user_requests[user_id] = [
+            req_time for req_time in self.user_requests[user_id]
+            if req_time > current_time - self.window
+        ]
+        
+        # Check if limit exceeded
+        if len(self.user_requests[user_id]) >= self.max_requests:
+            return False
+        
+        # Add current request
+        self.user_requests[user_id].append(current_time)
+        return True
 
 class SecurityMiddleware(BaseMiddleware):
-    def __init__(self, redis_client, encryption_key: str):
-        self.redis = redis_client
+    def __init__(self, encryption_key: Optional[str] = None):
         self.encryption_key = encryption_key
-        self.rate_limiter = {}
+        self.rate_limiter = RateLimiter(max_requests=20, window_seconds=60)
+        self.user_sessions = {}
         
     async def __call__(
         self,
@@ -19,43 +44,54 @@ class SecurityMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any]
     ) -> Any:
-        user = data.get("event_from_user")
+        # Get user from event
+        user = None
+        if hasattr(event, 'from_user'):
+            user = event.from_user
+        elif data.get("event_from_user"):
+            user = data.get("event_from_user")
+        
         if not user:
             return await handler(event, data)
         
         # Rate limiting
-        if not await self._check_rate_limit(user.id):
-            await event.answer("⚠️ Too many requests. Please wait a moment.")
+        if not await self.rate_limiter.check_rate_limit(user.id):
+            if isinstance(event, Message):
+                await event.answer("⚠️ Too many requests. Please wait a moment.")
             return
         
-        # Input sanitization
-        if hasattr(event, 'text'):
+        # Input sanitization for messages
+        if isinstance(event, Message) and event.text:
             event.text = self._sanitize_input(event.text)
         
-        # Session validation
-        if not await self._validate_session(user.id):
-            await event.answer("🔒 Session expired. Please use /start to begin.")
-            return
-        
-        # Update last activity
-        await self._update_activity(user.id)
+        # Update user session
+        self.user_sessions[user.id] = time.time()
         
         return await handler(event, data)
     
-    async def _check_rate_limit(self, user_id: int) -> bool:
-        """Implement sliding window rate limiting"""
-        key = f"rate_limit:{user_id}"
-        current_time = time.time()
-        window = 60  # 1 minute window
-        max_requests = 20
+    def _sanitize_input(self, text: str) -> str:
+        """Sanitize user input to prevent injections"""
+        if not text:
+            return text
         
-        # Get current window data
-        pipeline = self.redis.pipeline()
-        pipeline.zremrangebyscore(key, 0, current_time - window)
-        pipeline.zcard(key)
-        pipeline.zadd(key, {str(current_time): current_time})
-        pipeline.expire(key, window)
-        results = await pipeline.execute()
+        # Remove any HTML tags
+        text = re.sub(r'<[^>]+>', '', text)
         
-        request_count = results[1]
-        return request_count < max_requests
+        # Escape special characters
+        text = html.escape(text)
+        
+        # Limit length
+        max_length = 4096
+        if len(text) > max_length:
+            text = text[:max_length]
+        
+        return text
+    
+    async def _validate_session(self, user_id: int) -> bool:
+        """Check if user session is valid"""
+        session_timeout = 3600  # 1 hour
+        last_activity = self.user_sessions.get(user_id, 0)
+        
+        if time.time() - last_activity > session_timeout:
+            return False
+        return True

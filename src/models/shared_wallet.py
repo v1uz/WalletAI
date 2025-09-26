@@ -1,6 +1,8 @@
 # src/models/shared_wallet.py
-from sqlalchemy import Column, Integer, BigInteger, String, Numeric, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, BigInteger, String, Numeric, DateTime, ForeignKey, Enum, func
 from sqlalchemy.orm import relationship
+from typing import List
+from .base import Base
 
 class SharedWallet(Base):
     __tablename__ = 'shared_wallets'
@@ -25,6 +27,19 @@ class WalletMember(Base):
     wallet = relationship("SharedWallet", back_populates="members")
 
 # src/services/debt_calculation_service.py
+from dataclasses import dataclass
+
+@dataclass
+class Settlement:
+    debtor: int
+    creditor: int
+    amount: float
+
+def get_member_balances(wallet_id: int) -> dict:
+    """Get member balances for a wallet"""
+    # This would typically query the database
+    return {}
+
 class DebtCalculationService:
     @staticmethod
     def calculate_settlements(wallet_id: int) -> List[Settlement]:

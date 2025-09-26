@@ -1,43 +1,41 @@
 from typing import Optional
-from pydantic_settings import BaseSettings
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
 
+# Load environment variables
 load_dotenv()
 
-class Settings(BaseSettings):
-    # Bot configuration - REQUIRED
-    BOT_TOKEN: str = os.getenv("BOT_TOKEN", "")
+class Settings:
+    """Simple settings class without pydantic to avoid import issues"""
     
-    # Database - with SQLite as default for easy start
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./walletai.db")
-    
-    # Redis - optional for development
-    REDIS_URL: Optional[str] = os.getenv("REDIS_URL", None)
-    USE_REDIS: bool = os.getenv("USE_REDIS", "false").lower() == "true"
-    
-    # OpenAI - optional initially
-    OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY", None)
-    
-    # Security - will generate if not provided
-    ENCRYPTION_KEY: Optional[str] = os.getenv("ENCRYPTION_KEY", None)
-    
-    # Environment
-    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
-    DEBUG: bool = os.getenv("DEBUG", "true").lower() == "true"
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = 'utf-8'
-        case_sensitive = True
+    def __init__(self):
+        # Bot configuration - REQUIRED
+        self.BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+        
+        # Database - with SQLite as default for easy start
+        self.DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./walletai.db")
+        
+        # Redis - optional for development
+        self.REDIS_URL = os.getenv("REDIS_URL", None)
+        self.USE_REDIS = os.getenv("USE_REDIS", "false").lower() == "true"
+        
+        # OpenAI - optional initially
+        self.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", None)
+        
+        # Security - will generate if not provided
+        self.ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", None)
+        
+        # Environment
+        self.ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+        self.DEBUG = os.getenv("DEBUG", "true").lower() == "true"
+        
+        # Validate bot token
+        if not self.BOT_TOKEN:
+            raise ValueError(
+                "\n\n❌ BOT_TOKEN is not set!\n"
+                "Please add your bot token to .env file:\n"
+                "BOT_TOKEN=your_bot_token_here\n"
+            )
 
 # Create settings instance
 settings = Settings()
-
-# Validate bot token
-if not settings.BOT_TOKEN:
-    raise ValueError(
-        "\n\n❌ BOT_TOKEN is not set!\n"
-        "Please add your bot token to .env file:\n"
-        "BOT_TOKEN=your_bot_token_here\n"
-    )

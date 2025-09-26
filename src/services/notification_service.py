@@ -2,6 +2,9 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from datetime import datetime, timedelta
 import asyncio
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from ..models.budget import Budget
 
 class NotificationService:
     def __init__(self, bot, db_session, redis_client):

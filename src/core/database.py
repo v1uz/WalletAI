@@ -53,5 +53,35 @@ class Database:
                 session.add(category)
             
             await session.commit()
+            
+    async def init_default_categories_with_session(self, user_id: int, session):
+        default_categories = [
+                ("🍔 Food & Dining", "🍔", TransactionType.EXPENSE),
+                ("🚗 Transportation", "🚗", TransactionType.EXPENSE),
+                ("🏠 Housing", "🏠", TransactionType.EXPENSE),
+                ("🎬 Entertainment", "🎬", TransactionType.EXPENSE),
+                ("🛒 Shopping", "🛒", TransactionType.EXPENSE),
+                ("💊 Healthcare", "💊", TransactionType.EXPENSE),
+                ("📚 Education", "📚", TransactionType.EXPENSE),
+                ("💡 Utilities", "💡", TransactionType.EXPENSE),
+                ("🏷️ Other Expense", "🏷️", TransactionType.EXPENSE),
+                # Income categories
+                ("💰 Salary", "💰", TransactionType.INCOME),
+                ("💼 Business", "💼", TransactionType.INCOME),
+                ("📈 Investment", "📈", TransactionType.INCOME),
+                ("🎁 Gift", "🎁", TransactionType.INCOME),
+                ("💸 Other Income", "💸", TransactionType.INCOME),
+        ]
+        
+        for name, icon, trans_type in default_categories:
+            category = Category(
+                user_id=user_id,
+                name=name,
+                icon=icon,
+                transaction_type=trans_type,
+                is_default=True
+            )
+            session.add(category)
+        # Don't commit here, let the caller handle it
 
 database = Database()

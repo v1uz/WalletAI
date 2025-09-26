@@ -1,10 +1,12 @@
 # src/models/transaction.py
-from sqlalchemy import Column, Integer, BigInteger, Numeric, String, DateTime, Enum, ForeignKey
+from sqlalchemy import Column, Integer, BigInteger, Numeric, String, DateTime, Enum, ForeignKey, func, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 from cryptography.fernet import Fernet
 from decimal import Decimal
 import enum
+import os
+from .base import Base
 
 class TransactionType(enum.Enum):
     INCOME = "income"
@@ -27,6 +29,7 @@ class Transaction(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
+    user = relationship("User", back_populates="transactions")
     category = relationship("Category", back_populates="transactions")
     attachments = relationship("TransactionAttachment", cascade="all, delete-orphan")
     
