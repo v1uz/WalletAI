@@ -1,0 +1,3 @@
+"""
+Internationalization middleware for WalletAI.
+"""
