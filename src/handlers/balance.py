@@ -1,10 +1,15 @@
+# handlers/balance.py
+import logging  # Added missing import
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 from datetime import datetime, timedelta
-from models.base import User, Transaction, TransactionType
+from models.base import User, Transaction
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 router = Router()
 
@@ -27,7 +32,7 @@ async def cmd_balance(message: Message, session: AsyncSession):
         select(func.sum(Transaction.amount)).where(
             and_(
                 Transaction.user_id == user.id,
-                Transaction.transaction_type == TransactionType.INCOME
+                Transaction.transaction_type == "income"  # Changed from enum
             )
         )
     )
@@ -38,7 +43,7 @@ async def cmd_balance(message: Message, session: AsyncSession):
         select(func.sum(Transaction.amount)).where(
             and_(
                 Transaction.user_id == user.id,
-                Transaction.transaction_type == TransactionType.EXPENSE
+                Transaction.transaction_type == "expense"  # Changed from enum
             )
         )
     )
@@ -50,7 +55,7 @@ async def cmd_balance(message: Message, session: AsyncSession):
         select(func.sum(Transaction.amount)).where(
             and_(
                 Transaction.user_id == user.id,
-                Transaction.transaction_type == TransactionType.EXPENSE,
+                Transaction.transaction_type == "expense",  # Changed from enum
                 Transaction.date >= start_of_month
             )
         )
@@ -63,7 +68,7 @@ async def cmd_balance(message: Message, session: AsyncSession):
         select(func.sum(Transaction.amount)).where(
             and_(
                 Transaction.user_id == user.id,
-                Transaction.transaction_type == TransactionType.EXPENSE,
+                Transaction.transaction_type == "expense",  # Changed from enum
                 Transaction.date >= start_of_day
             )
         )
@@ -73,27 +78,43 @@ async def cmd_balance(message: Message, session: AsyncSession):
     # Calculate balance
     balance = total_income - total_expense
     
+    # Get currency symbol
+    def get_currency_symbol(currency: str) -> str:
+        """Get currency symbol from currency code"""
+        symbols = {
+            'USD': '$', 'EUR': '€', 'GBP': '£', 'JPY': '¥',
+            'RUB': '₽', 'INR': '₹', 'BRL': 'R$', 'CAD': 'C$'
+        }
+        return symbols.get(currency, currency)
+    
+    currency_symbol = get_currency_symbol(user.currency)
+    
     # Format message
     balance_emoji = "🟢" if balance >= 0 else "🔴"
     
+    # Add buttons for transaction history
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📜 Transaction History", callback_data="transaction_history")],
+        [InlineKeyboardButton(text="➕ Add Transaction", callback_data="add_transaction")]
+    ])
+    
     await message.answer(
         f"💰 <b>Your Financial Summary</b>\n\n"
-        f"{balance_emoji} Balance: <b>${balance:.2f}</b>\n\n"
+        f"{balance_emoji} Balance: <b>{currency_symbol}{balance:.2f}</b>\n\n"
         f"📊 <b>All Time:</b>\n"
-        f"💚 Total Income: ${total_income:.2f}\n"
-        f"💔 Total Expenses: ${total_expense:.2f}\n\n"
+        f"💚 Total Income: {currency_symbol}{total_income:.2f}\n"
+        f"💔 Total Expenses: {currency_symbol}{total_expense:.2f}\n\n"
         f"📅 <b>This Month:</b>\n"
-        f"💸 Spent: ${month_expense:.2f}\n\n"
+        f"💸 Spent: {currency_symbol}{month_expense:.2f}\n\n"
         f"📆 <b>Today:</b>\n"
-        f"💸 Spent: ${today_expense:.2f}\n\n"
-        f"Use /report for detailed breakdown\n"
-        f"Use /add to add new transaction",
+        f"💸 Spent: {currency_symbol}{today_expense:.2f}",
+        reply_markup=keyboard,
         parse_mode="HTML"
     )
 
-# Add this function to your handlers/balance.py file
-
-async def show_balance_for_user(user_telegram_id: int, message: Message, session):
+async def show_balance_for_user(user_telegram_id: int, message: Message, session: AsyncSession):
     """
     Helper function to show balance for a specific user
     Used when balance is requested from callbacks where message.from_user may not be available
@@ -110,31 +131,60 @@ async def show_balance_for_user(user_telegram_id: int, message: Message, session
             return
         
         # Calculate balance
-        from services.transaction_service import TransactionService
+        # Total income
+        income_result = await session.execute(
+            select(func.sum(Transaction.amount)).where(
+                and_(
+                    Transaction.user_id == user.id,
+                    Transaction.transaction_type == "income"
+                )
+            )
+        )
+        total_income = income_result.scalar() or 0
         
-        transaction_service = TransactionService(session)
-        balance = await transaction_service.get_user_balance(user.id)
+        # Total expenses
+        expense_result = await session.execute(
+            select(func.sum(Transaction.amount)).where(
+                and_(
+                    Transaction.user_id == user.id,
+                    Transaction.transaction_type == "expense"
+                )
+            )
+        )
+        total_expense = expense_result.scalar() or 0
+        
+        balance = total_income - total_expense
         
         # Get currency symbol
-        from main import get_currency_symbol
+        def get_currency_symbol(currency: str) -> str:
+            """Get currency symbol from currency code"""
+            symbols = {
+                'USD': '$', 'EUR': '€', 'GBP': '£', 'JPY': '¥',
+                'RUB': '₽', 'INR': '₹', 'BRL': 'R$', 'CAD': 'C$'
+            }
+            return symbols.get(currency, currency)
+        
         currency_symbol = get_currency_symbol(user.currency)
         
         # Format balance message
+        balance_emoji = "🟢" if balance >= 0 else "🔴"
+        
         balance_text = (
             f"💰 <b>Your Balance</b>\n\n"
-            f"Current Balance: <b>{currency_symbol}{balance:.2f}</b>\n"
+            f"{balance_emoji} Current Balance: <b>{currency_symbol}{balance:.2f}</b>\n\n"
+            f"💚 Total Income: {currency_symbol}{total_income:.2f}\n"
+            f"💔 Total Expenses: {currency_symbol}{total_expense:.2f}"
         )
         
-        # Get recent transactions
-        recent_transactions = await transaction_service.get_recent_transactions(user.id, limit=5)
+        # Add button for transaction history
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
         
-        if recent_transactions:
-            balance_text += "\n<b>Recent Transactions:</b>\n"
-            for trans in recent_transactions:
-                emoji = "➕" if trans.transaction_type == "income" else "➖"
-                balance_text += f"{emoji} {currency_symbol}{trans.amount:.2f} - {trans.description[:30]}\n"
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📜 Transaction History", callback_data="transaction_history")],
+            [InlineKeyboardButton(text="➕ Add Transaction", callback_data="add_transaction")]
+        ])
         
-        await message.answer(balance_text, parse_mode="HTML")
+        await message.answer(balance_text, reply_markup=keyboard, parse_mode="HTML")
         
     except Exception as e:
         logger.error(f"Error showing balance for user {user_telegram_id}: {e}")

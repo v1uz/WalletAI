@@ -1,3 +1,4 @@
+# models/base.py - Fixed version
 from sqlalchemy import create_engine, Column, Integer, BigInteger, String, DateTime, Numeric, Boolean, ForeignKey, Text, Enum as SQLEnum
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -6,10 +7,6 @@ from datetime import datetime
 import enum
 
 Base = declarative_base()
-
-class TransactionType(enum.Enum):
-    INCOME = "income"
-    EXPENSE = "expense"
 
 class User(Base):
     __tablename__ = 'users'
@@ -21,6 +18,7 @@ class User(Base):
     last_name = Column(String(255))
     currency = Column(String(3), default='USD')
     language = Column(String(2), default='EN')
+    timezone = Column(String(50))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     is_active = Column(Boolean, default=True)
     
@@ -35,26 +33,30 @@ class Category(Base):
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     name = Column(String(100), nullable=False)
-    icon = Column(String(10))  # Emoji icon
-    transaction_type = Column(SQLEnum(TransactionType), nullable=False)
-    is_default = Column(Boolean, default=False)
+    type = Column(String(20), nullable=False)  # 'income' or 'expense'
+    icon = Column(String(10))  # Optional emoji icon
+    color = Column(String(7))  # Optional hex color
+    monthly_limit = Column(Numeric(12, 2))  # Optional budget limit
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     user = relationship("User", back_populates="categories")
     transactions = relationship("Transaction", back_populates="category")
 
-class Transaction(Base):  # THIS CLASS IS MISSING FROM YOUR FILE
+class Transaction(Base):
     __tablename__ = 'transactions'
     
     id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    category_id = Column(Integer, ForeignKey('categories.id'))
+    category_id = Column(Integer, ForeignKey('categories.id'), nullable=True)
     amount = Column(Numeric(12, 2), nullable=False)
-    transaction_type = Column(SQLEnum(TransactionType), nullable=False)
+    transaction_type = Column(String(20), nullable=False)  # 'income' or 'expense'
     description = Column(Text)
     date = Column(DateTime(timezone=True), default=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     user = relationship("User", back_populates="transactions")

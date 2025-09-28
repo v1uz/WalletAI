@@ -1,9 +1,9 @@
-from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Numeric, Boolean, ForeignKey, Text, Enum as SQLEnum
+from sqlalchemy import Column, Integer, BigInteger, String, DateTime, Numeric, Boolean, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from datetime import datetime
 import enum
-from models.base import Base, TransactionType
+from models.base import Base
 
 class RecurringFrequency(enum.Enum):
     DAILY = "daily"
@@ -18,7 +18,7 @@ class RecurringTransaction(Base):
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     category_id = Column(Integer, ForeignKey('categories.id'))
     amount = Column(Numeric(12, 2), nullable=False)
-    transaction_type = Column(SQLEnum(TransactionType), nullable=False)
+    transaction_type = Column(String(20), nullable=False)  # Changed from Enum to String
     description = Column(Text)
     frequency = Column(String(20), nullable=False)  # daily, weekly, monthly, yearly
     next_execution = Column(DateTime(timezone=True))

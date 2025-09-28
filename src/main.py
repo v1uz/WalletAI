@@ -22,9 +22,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from handlers.settings import router as settings_router
 from handlers.recurring import router as recurring_router
 from handlers.export import router as export_router
-from handlers.transactions import router as trans_router
 from handlers.balance import router as balance_router
-from handlers.categories_enhanced import router as categories_enhanced_router
+from handlers.transactions_fixed import router as trans_router
+from handlers.history import router as history_router
+
 
 # Setup logging
 setup_logging(use_sentry=False)
@@ -181,10 +182,9 @@ async def main():
         
         # Register routers
         logger.info("Registering command handlers...")
-        dp.include_router(categories_enhanced_router)  # Category management first
-        dp.include_router(trans_router)               # Then transactions
+        dp.include_router(trans_router)          # Fixed transaction handler with category management
         dp.include_router(balance_router)
-        dp.include_router(settings_router)
+        dp.include_router(settings_router) 
         dp.include_router(recurring_router)
         dp.include_router(export_router)
                 
@@ -205,42 +205,40 @@ async def main():
                         telegram_id=message.from_user.id,
                         username=message.from_user.username,
                         first_name=message.from_user.first_name,
-                        last_name=message.from_user.last_name
+                        last_name=message.from_user.last_name,
+                        currency='USD',  # Default currency
+                        language='EN'     # Default language
                     )
                     session.add(user)
                     await session.flush()
-                    
-                    # DO NOT initialize default categories - users create their own
                     await session.commit()
                     
-                    welcome_msg = "🎉 Welcome to WalletAI!"
+                    welcome_msg = (
+                        f"🎉 Welcome to WalletAI, {message.from_user.first_name}!\n\n"
+                        f"I'll help you track your finances.\n\n"
+                        f"<b>Getting Started:</b>\n"
+                        f"1️⃣ Click 'Add Transaction' below\n"
+                        f"2️⃣ Create your first category\n"
+                        f"3️⃣ Start tracking your money!\n\n"
+                        f"No default categories - you're in full control! 🎯"
+                    )
                     logger.info(f"New user registered: {user.telegram_id}")
                 else:
-                    welcome_msg = "👋 Welcome back!"
+                    welcome_msg = f"👋 Welcome back, {message.from_user.first_name}!"
                 
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [
-                        InlineKeyboardButton(text="➕ Add Transaction", callback_data="menu:add"),
-                        InlineKeyboardButton(text="💰 Balance", callback_data="menu:balance")
+                        InlineKeyboardButton(text="➕ Add Transaction", callback_data="add_transaction"),
+                        InlineKeyboardButton(text="💰 Balance", callback_data="show_balance")
                     ],
                     [
                         InlineKeyboardButton(text="📊 Reports", callback_data="menu:reports"),
                         InlineKeyboardButton(text="⚙️ Settings", callback_data="settings")
-                    ],
-                    [
-                        InlineKeyboardButton(text="🪙 Financial advises", callback_data="ai_advices"),
-                        InlineKeyboardButton(text="🏆 Goals/Dreams", callback_data="goals_dreams")
                     ]
                 ])
                 
                 await message.answer(
-                    f"{welcome_msg}\n\n"
-                    f"I'm your personal finance assistant.\n\n"
-                    f"<b>Quick Commands:</b>\n"
-                    f"/add - Add income or expense\n"
-                    f"/balance - Check your balance\n"
-                    f"/help - Show all commands\n\n"
-                    f"Let's manage your finances! 💪",
+                    welcome_msg,
                     reply_markup=keyboard,
                     parse_mode="HTML"
                 )
@@ -365,24 +363,12 @@ async def main():
                     await message.answer("User not found. Please use /start first.")
                     return
                 
-                # Check if migration module exists
-                try:
-                    from core.database_updated import migrate_remove_default_categories
-                    await migrate_remove_default_categories(session, user.id)
-                    
-                    await message.answer(
-                        "✅ <b>Migration completed!</b>\n\n"
-                        "Default categories have been removed.\n"
-                        "You can now create your own custom categories.\n\n"
-                        "Use /add to start creating your personalized categories!",
-                        parse_mode="HTML"
-                    )
-                except ImportError:
-                    logger.warning("Migration module not found")
-                    await message.answer(
-                        "⚠️ Migration module not available.\n"
-                        "Please ensure database_updated.py exists in core/ directory."
-                    )
+                await message.answer(
+                    "⚠️ To run the migration, please execute the migration script:\n"
+                    "`python migrations/remove_default_categories.py`\n\n"
+                    "This will remove all unused default categories.",
+                    parse_mode="Markdown"
+                )
                     
             except Exception as e:
                 logger.error(f"Migration error: {e}", exc_info=True)
@@ -413,11 +399,11 @@ async def main():
                     [
                         InlineKeyboardButton(
                             text=get_text('add_transaction', lang), 
-                            callback_data="menu:add"
+                            callback_data="add_transaction"
                         ),
                         InlineKeyboardButton(
                             text=get_text('check_balance', lang), 
-                            callback_data="menu:balance"
+                            callback_data="show_balance"
                         )
                     ],
                     [
@@ -428,16 +414,6 @@ async def main():
                         InlineKeyboardButton(
                             text=get_text('settings', lang), 
                             callback_data="settings"
-                        )
-                    ],
-                    [
-                        InlineKeyboardButton(
-                            text=get_text('ai_advices', lang), 
-                            callback_data="ai_advices"
-                        ),
-                        InlineKeyboardButton(
-                            text=get_text('goals_dreams', lang), 
-                            callback_data="goals_dreams"
                         )
                     ]
                 ])
@@ -463,13 +439,8 @@ async def main():
             try:
                 await callback.answer()
                 action = callback.data.split(":")[1]
-                
-                if action == "add":
-                    # Trigger add transaction flow
-                    from handlers.transactions import cmd_add_transaction
-                    await cmd_add_transaction(callback.message, state)
                     
-                elif action == "balance":
+                if action == "balance":
                     # Show balance
                     from handlers.balance import show_balance_for_user
                     # Use a helper function instead of modifying message

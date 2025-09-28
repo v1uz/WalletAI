@@ -4,7 +4,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
-from models.base import User, Category, TransactionType
+from models.base import User, Category  # Removed TransactionType import
 from models.recurring import RecurringTransaction
 from decimal import Decimal
 from datetime import datetime, timedelta
@@ -119,7 +119,7 @@ async def recurring_amount_entered(message: Message, state: FSMContext, session:
     
     await state.update_data(amount=float(amount))
     data = await state.get_data()
-    trans_type = TransactionType.INCOME if data['transaction_type'] == 'income' else TransactionType.EXPENSE
+    trans_type = data['transaction_type']  # Already a string, not enum
     
     # Get user categories
     result = await session.execute(
@@ -130,7 +130,7 @@ async def recurring_amount_entered(message: Message, state: FSMContext, session:
     categories = await session.execute(
         select(Category).where(
             Category.user_id == user.id,
-            Category.transaction_type == trans_type
+            Category.type == trans_type  # Use string directly
         ).order_by(Category.name)
     )
     categories = categories.scalars().all()
@@ -140,12 +140,12 @@ async def recurring_amount_entered(message: Message, state: FSMContext, session:
     for i in range(0, len(categories), 2):
         row = []
         row.append(InlineKeyboardButton(
-            text=f"{categories[i].icon} {categories[i].name}",
+            text=f"{categories[i].icon if categories[i].icon else '📁'} {categories[i].name}",
             callback_data=f"rec_cat:{categories[i].id}"
         ))
         if i + 1 < len(categories):
             row.append(InlineKeyboardButton(
-                text=f"{categories[i + 1].icon} {categories[i + 1].name}",
+                text=f"{categories[i + 1].icon if categories[i + 1].icon else '📁'} {categories[i + 1].name}",
                 callback_data=f"rec_cat:{categories[i + 1].id}"
             ))
         keyboard_buttons.append(row)
@@ -212,14 +212,14 @@ async def save_recurring(callback: CallbackQuery, state: FSMContext, session: As
     )
     user = result.scalar_one()
     
-    # Create recurring transaction
-    trans_type = TransactionType.INCOME if data['transaction_type'] == 'income' else TransactionType.EXPENSE
+    # Create recurring transaction - use string for transaction_type
+    trans_type = data['transaction_type']  # This is already a string
     
     recurring = RecurringTransaction(
         user_id=user.id,
         category_id=data['category_id'],
         amount=Decimal(str(data['amount'])),
-        transaction_type=trans_type,
+        transaction_type=trans_type,  # Use string directly
         description=data.get('description'),
         frequency=frequency,
         next_execution=datetime.now() + timedelta(days=1),
@@ -277,7 +277,7 @@ async def view_recurring(callback: CallbackQuery, session: AsyncSession):
     text = "📋 <b>Your Recurring Transactions</b>\n\n"
     
     for trans, category in transactions:
-        emoji = "💰" if trans.transaction_type == TransactionType.INCOME else "💸"
+        emoji = "💰" if trans.transaction_type == "income" else "💸"  # Compare with string
         freq_text = {
             'daily': 'Daily',
             'weekly': 'Weekly',
@@ -285,9 +285,11 @@ async def view_recurring(callback: CallbackQuery, session: AsyncSession):
             'yearly': 'Yearly'
         }
         
+        icon = category.icon if category.icon else "📁"
+        
         text += (
-            f"{emoji} <b>{trans.amount}</b> - {category.icon} {category.name}\n"
-            f"   {freq_text[trans.frequency]} • {trans.description or 'No description'}\n\n"
+            f"{emoji} <b>{trans.amount}</b> - {icon} {category.name}\n"
+            f"   {freq_text.get(trans.frequency, trans.frequency)} • {trans.description or 'No description'}\n\n"
         )
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
