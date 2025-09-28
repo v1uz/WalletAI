@@ -44,7 +44,7 @@ class Category(Base):
     user = relationship("User", back_populates="categories")
     transactions = relationship("Transaction", back_populates="category")
 
-class Transaction(Base):
+class Transaction(Base):  # THIS CLASS IS MISSING FROM YOUR FILE
     __tablename__ = 'transactions'
     
     id = Column(Integer, primary_key=True)
